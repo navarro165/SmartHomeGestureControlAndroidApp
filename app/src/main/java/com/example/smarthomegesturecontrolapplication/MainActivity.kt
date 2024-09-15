@@ -11,6 +11,7 @@ import androidx.camera.core.Preview
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.view.PreviewView
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -47,32 +48,6 @@ import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 
 
-class MainActivity : ComponentActivity() {
-    override fun onCreate(savedInstanceState: Bundle?) {
-        super.onCreate(savedInstanceState)
-        enableEdgeToEdge()
-        setContent {
-            SmartHomeGestureControlApplicationTheme {
-                val navController = rememberNavController()
-                NavHost(navController = navController, startDestination = "screen1") {
-                    composable("screen1") { Screen1(navController) }
-                    composable(
-                        "screen2/{videoResId}", // Use videoResId as argument name
-                        arguments = listOf(navArgument("videoResId") {
-                            type = NavType.IntType
-                        }) // Define argument type as Int
-                    ) { backStackEntry ->
-                        val videoResId = backStackEntry.arguments?.getInt("videoResId")
-                            ?: 0 // Retrieve videoResId
-                        Screen2(navController, videoResId) // Pass videoResId to Screen2
-                    }
-                    composable("screen3") { Screen3(navController) }
-                }
-            }
-        }
-    }
-}
-
 val GESTURES = mapOf(
     "Turn on lights" to R.raw.h_lighton,
     "Turn off lights" to R.raw.h_lightoff,
@@ -94,15 +69,47 @@ val GESTURES = mapOf(
 )
 
 
+class MainActivity : ComponentActivity() {
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        enableEdgeToEdge()
+
+        setContent {
+            SmartHomeGestureControlApplicationTheme {
+                val navController = rememberNavController()
+
+                NavHost(navController = navController, startDestination = "screen1") {
+                    // screen 1
+                    composable(route = "screen1") { Screen1(navController) }
+
+                    // screen 2
+                    composable(
+                        route = "screen2/{videoResId}",
+                        arguments = listOf(navArgument("videoResId") { type = NavType.IntType })
+                    ) {
+                        backStackEntry ->
+                        val videoResId = backStackEntry.arguments?.getInt("videoResId") ?: 0
+                        Screen2(navController, videoResId)
+                    }
+
+                    // screen 3
+                    composable("screen3") { Screen3(navController) }
+                }
+            }
+        }
+    }
+}
+
+
 @Composable
 fun Screen1(navController: NavController) {
     var selectedGesture by remember { mutableStateOf("") }
-    var selectedPath by remember { mutableStateOf(0) } // Use Int for resource ID
+    var selectedPath by remember { mutableStateOf(0) }
     var expanded by remember { mutableStateOf(false) }
 
-    Column(modifier = Modifier
-        .fillMaxSize()
-        .padding(16.dp)) {
+    Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
+        Spacer(modifier = Modifier.height(16.dp))
         OutlinedTextField(
             value = selectedGesture,
             onValueChange = { selectedGesture = it },
@@ -140,35 +147,59 @@ fun Screen1(navController: NavController) {
             Text("Next")
         }
 
-        // For debugging
+        Spacer(modifier = Modifier.height(16.dp))
         Text("Selected gesture: $selectedGesture", modifier = Modifier.fillMaxWidth())
     }
 }
 
 @Composable
-fun Screen2(navController: NavController, videoResId: Int) { // Change argument to Int
-    val context = LocalContext.current // Get the context
-    val videoUri = Uri.parse("android.resource://${context.packageName}/${videoResId}")
+fun Screen2(navController: NavController, videoResId: Int) {
+    val videoUri = Uri.parse("android.resource://${LocalContext.current.packageName}/$videoResId")
+    var replayCount by remember { mutableStateOf(0) }
+    var videoView by remember { mutableStateOf<VideoView?>(null) }
 
-    Column(modifier = Modifier
-        .fillMaxSize()
-        .padding(16.dp)) {
+    Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
+        Spacer(modifier = Modifier.height(16.dp))
+        Text("Selected gesture: TODO", modifier = Modifier.fillMaxWidth())
+
+        // video
+        Spacer(modifier = Modifier.height(16.dp))
         AndroidView(
+            modifier = Modifier.fillMaxWidth(),
             factory = { context ->
                 VideoView(context).apply {
+                    videoView = this
                     setVideoURI(videoUri)
-                    setMediaController(null)
+                    setOnCompletionListener {
+                        if (replayCount < 2) {
+                            replayCount++
+                            start()
+                        } else {
+                            pause()
+                        }
+                    }
                     requestFocus()
                     start()
                 }
             },
-            modifier = Modifier.fillMaxWidth()
         )
 
+        // buttons row
         Spacer(modifier = Modifier.height(16.dp))
+        Row(modifier = Modifier.fillMaxWidth()) {
+            // back button
+            Button(onClick = { navController.popBackStack() }) { Text("Back") }
+            Spacer(modifier = Modifier.weight(1f))
 
-        Button(onClick = { navController.navigate("screen3") }) {
-            Text("Practice")
+            // replay button
+            Button(onClick = {
+                replayCount = 0
+                videoView?.start()
+            }) { Text("Replay") }
+            Spacer(modifier = Modifier.weight(1f))
+
+            // practice button
+            Button(onClick = { navController.navigate("screen3") }) { Text("Practice") }
         }
     }
 }
@@ -179,9 +210,7 @@ fun Screen3(navController: NavController) {
     val cameraProviderFuture = remember { ProcessCameraProvider.getInstance(context) }
     val cameraExecutor: ExecutorService = Executors.newSingleThreadExecutor()
 
-    Column(modifier = Modifier
-        .fillMaxSize()
-        .padding(16.dp)) {
+    Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
         AndroidView(factory = { ctx ->
             val previewView = PreviewView(ctx)
             val executor = ContextCompat.getMainExecutor(ctx)
