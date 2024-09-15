@@ -67,6 +67,7 @@ val GESTURES = mapOf(
     "8" to R.raw.h_8,
     "9" to R.raw.h_9
 )
+val invGESTURES = GESTURES.entries.associateBy({ it.value }, { it.key })
 
 
 class MainActivity : ComponentActivity() {
@@ -130,8 +131,8 @@ fun Screen1(navController: NavController) {
             GESTURES.forEach { (gesture, path) ->
                 DropdownMenuItem(
                     onClick = {
-                        selectedGesture = gesture // Store the gesture name
-                        selectedPath = path // Store the resource ID
+                        selectedGesture = gesture
+                        selectedPath = path
                         expanded = false
                     },
                     text = { Text(gesture) }
@@ -141,11 +142,9 @@ fun Screen1(navController: NavController) {
 
         Spacer(modifier = Modifier.height(16.dp))
         Button(
-            onClick = { navController.navigate("screen2/${selectedPath}") }, // Pass selectedPath (resource ID)
+            onClick = { navController.navigate("screen2/${selectedPath}") },
             modifier = Modifier.fillMaxWidth()
-        ) {
-            Text("Next")
-        }
+        ) { Text("Next") }
 
         Spacer(modifier = Modifier.height(16.dp))
         Text("Selected gesture: $selectedGesture", modifier = Modifier.fillMaxWidth())
@@ -160,7 +159,7 @@ fun Screen2(navController: NavController, videoResId: Int) {
 
     Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
         Spacer(modifier = Modifier.height(16.dp))
-        Text("Selected gesture: TODO", modifier = Modifier.fillMaxWidth())
+        Text("Selected gesture: ${invGESTURES[videoResId]}", modifier = Modifier.fillMaxWidth())
 
         // video
         Spacer(modifier = Modifier.height(16.dp))
@@ -181,7 +180,7 @@ fun Screen2(navController: NavController, videoResId: Int) {
                     requestFocus()
                     start()
                 }
-            },
+            }
         )
 
         // buttons row
