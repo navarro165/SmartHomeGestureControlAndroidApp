@@ -50,7 +50,7 @@ android {
 }
 
 dependencies {
-
+    implementation(libs.androidx.camera.view.v130)
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.activity.compose)
@@ -66,6 +66,10 @@ dependencies {
     implementation(libs.androidx.camera.view)
     implementation(libs.androidx.media3.session)
     implementation(libs.androidx.media3.exoplayer)
+    implementation(libs.androidx.camera.camera2)
+    implementation(libs.androidx.camera.video)
+    implementation(libs.androidx.foundation.layout.android)
+    implementation(libs.androidx.viewfinder.core)
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
