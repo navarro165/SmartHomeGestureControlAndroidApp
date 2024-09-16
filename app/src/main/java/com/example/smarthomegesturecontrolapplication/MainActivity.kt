@@ -48,6 +48,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.ViewModel
 import androidx.navigation.NavController
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
@@ -81,7 +82,9 @@ val GESTURES = mapOf(
     "8" to R.raw.h_8,
     "9" to R.raw.h_9
 )
-val invGESTURES = GESTURES.entries.associateBy({ it.value }, { it.key })
+
+class SharedViewModel : ViewModel() { var selectedGesture: String = "" }
+var viewModel = SharedViewModel()
 
 
 class MainActivity : ComponentActivity() {
@@ -89,7 +92,6 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-
         setContent {
             SmartHomeGestureControlApplicationTheme {
                 val navController = rememberNavController()
@@ -119,17 +121,17 @@ class MainActivity : ComponentActivity() {
 
 @Composable
 fun Screen1(navController: NavController) {
-    var selectedGesture by remember { mutableStateOf("") }
     var selectedPath by remember { mutableStateOf(0) }
     var expanded by remember { mutableStateOf(false) }
+
 
     Column(modifier = Modifier
         .fillMaxSize()
         .padding(16.dp)) {
         Spacer(modifier = Modifier.height(16.dp))
         OutlinedTextField(
-            value = selectedGesture,
-            onValueChange = { selectedGesture = it },
+            value = viewModel.selectedGesture,
+            onValueChange = {  },
             label = { Text("Selected gesture") },
             trailingIcon = {
                 IconButton(onClick = { expanded = true }) {
@@ -147,7 +149,7 @@ fun Screen1(navController: NavController) {
             GESTURES.forEach { (gesture, path) ->
                 DropdownMenuItem(
                     onClick = {
-                        selectedGesture = gesture
+                        viewModel.selectedGesture = gesture
                         selectedPath = path
                         expanded = false
                     },
@@ -163,7 +165,7 @@ fun Screen1(navController: NavController) {
         ) { Text("Next") }
 
         Spacer(modifier = Modifier.height(16.dp))
-        Text("Selected gesture: $selectedGesture", modifier = Modifier.fillMaxWidth())
+        Text("Selected gesture: ${viewModel.selectedGesture}", modifier = Modifier.fillMaxWidth())
     }
 }
 
@@ -177,7 +179,7 @@ fun Screen2(navController: NavController, videoResId: Int) {
         .fillMaxSize()
         .padding(16.dp)) {
         Spacer(modifier = Modifier.height(16.dp))
-        Text("Selected gesture: ${invGESTURES[videoResId]}", modifier = Modifier.fillMaxWidth())
+        Text("Selected gesture: ${viewModel.selectedGesture}", modifier = Modifier.fillMaxWidth())
 
         // video
         Spacer(modifier = Modifier.height(16.dp))
@@ -239,7 +241,11 @@ fun Screen3(navController: NavController) {
     )
     LaunchedEffect(key1 = true) { launcher.launch(Manifest.permission.CAMERA) }
 
-    Column(modifier = Modifier.fillMaxSize()) {
+    Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
+        Spacer(modifier = Modifier.height(16.dp))
+        Text("Gesture to record: ${viewModel.selectedGesture}", modifier = Modifier.fillMaxWidth())
+        Spacer(modifier = Modifier.height(16.dp))
+
         if (!showCamera) { Text("Camera permission required") } else {
             AndroidView(
                 modifier = Modifier.weight(1f),
