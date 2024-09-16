@@ -1,15 +1,25 @@
 package com.example.smarthomegesturecontrolapplication
 
+import android.Manifest
 import android.net.Uri
 import android.os.Bundle
+import android.os.Environment
 import android.widget.VideoView
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.camera.core.CameraSelector
 import androidx.camera.core.Preview
 import androidx.camera.lifecycle.ProcessCameraProvider
+import androidx.camera.video.FileOutputOptions
+import androidx.camera.video.Recorder
+import androidx.camera.video.Recording
+import androidx.camera.video.VideoCapture
+import androidx.camera.video.VideoRecordEvent
 import androidx.camera.view.PreviewView
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -27,16 +37,17 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
-import androidx.lifecycle.LifecycleOwner
 import androidx.navigation.NavController
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
@@ -44,8 +55,11 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.example.smarthomegesturecontrolapplication.ui.theme.SmartHomeGestureControlApplicationTheme
-import java.util.concurrent.ExecutorService
-import java.util.concurrent.Executors
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import java.io.File
 
 
 val GESTURES = mapOf(
@@ -109,7 +123,9 @@ fun Screen1(navController: NavController) {
     var selectedPath by remember { mutableStateOf(0) }
     var expanded by remember { mutableStateOf(false) }
 
-    Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
+    Column(modifier = Modifier
+        .fillMaxSize()
+        .padding(16.dp)) {
         Spacer(modifier = Modifier.height(16.dp))
         OutlinedTextField(
             value = selectedGesture,
@@ -157,7 +173,9 @@ fun Screen2(navController: NavController, videoResId: Int) {
     var replayCount by remember { mutableStateOf(0) }
     var videoView by remember { mutableStateOf<VideoView?>(null) }
 
-    Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
+    Column(modifier = Modifier
+        .fillMaxSize()
+        .padding(16.dp)) {
         Spacer(modifier = Modifier.height(16.dp))
         Text("Selected gesture: ${invGESTURES[videoResId]}", modifier = Modifier.fillMaxWidth())
 
@@ -206,32 +224,115 @@ fun Screen2(navController: NavController, videoResId: Int) {
 @Composable
 fun Screen3(navController: NavController) {
     val context = LocalContext.current
-    val cameraProviderFuture = remember { ProcessCameraProvider.getInstance(context) }
-    val cameraExecutor: ExecutorService = Executors.newSingleThreadExecutor()
+    var recording: Recording? = remember { null }
+    val recorder = remember { Recorder.Builder().build() }
+    val videoCapture = remember { VideoCapture.withOutput(recorder) }
+    var isRecording by remember { mutableStateOf(false) }
+    var showCamera by remember { mutableStateOf(false) }
+    var countdown by remember { mutableStateOf(5) }
+    var showMessage by remember { mutableStateOf(false) }
+    var message by remember { mutableStateOf("") }
 
-    Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
-        AndroidView(factory = { ctx ->
-            val previewView = PreviewView(ctx)
-            val executor = ContextCompat.getMainExecutor(ctx)
-            cameraProviderFuture.addListener({
-                val cameraProvider = cameraProviderFuture.get()
-                val preview = Preview.Builder().build().also {
-                    it.setSurfaceProvider(previewView.surfaceProvider)
+    val launcher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission(),
+        onResult = { granted -> showCamera = granted }
+    )
+    LaunchedEffect(key1 = true) { launcher.launch(Manifest.permission.CAMERA) }
+
+    Column(modifier = Modifier.fillMaxSize()) {
+        if (!showCamera) { Text("Camera permission required") } else {
+            AndroidView(
+                modifier = Modifier.weight(1f),
+                factory = { context ->
+                    val previewView = PreviewView(context)
+                    val preview = Preview.Builder().build().also { it.setSurfaceProvider(previewView.surfaceProvider) }
+                    val cameraSelector = CameraSelector.Builder().requireLensFacing(CameraSelector.LENS_FACING_BACK).build()
+                    val cameraProviderFuture = ProcessCameraProvider.getInstance(context)
+
+                    cameraProviderFuture.addListener(
+                        {
+                            val cameraProvider = cameraProviderFuture.get()
+                            cameraProvider.unbindAll()
+                            cameraProvider.bindToLifecycle(context as ComponentActivity, cameraSelector, preview, videoCapture)
+                        },
+                        ContextCompat.getMainExecutor(context)
+                    )
+                    previewView
                 }
-                val cameraSelector = CameraSelector.DEFAULT_FRONT_CAMERA
-                cameraProvider.unbindAll()
-                cameraProvider.bindToLifecycle(context as LifecycleOwner, cameraSelector, preview)
-            }, executor)
-            previewView
-        }, modifier = Modifier.weight(1f))
+            )
 
-        Spacer(modifier = Modifier.height(16.dp))
+            if (isRecording) {
+                Spacer(modifier = Modifier.height(16.dp))
+                Text(
+                    text = "Recording: $countdown seconds remaining",
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
 
-        Button(onClick = {
-            // Implement video capture and upload logic here
-            navController.navigate("screen1")
-        }) {
-            Text("Upload")
+            if (showMessage) {
+                Text(
+                    text = message,
+                    modifier = Modifier.fillMaxWidth().padding(16.dp),
+                    textAlign = TextAlign.Center
+                )
+            }
+
+            // buttons row
+            Spacer(modifier = Modifier.height(16.dp))
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center) {
+                // back button
+                Button(onClick = { navController.popBackStack() }) { Text("Back") }
+                // home button
+                Button(onClick = { navController.navigate("screen1") }) { Text("Home") }
+                // record button
+                Button(
+                    onClick = {
+                        if (!isRecording) {
+                            val outputFile = File(
+                                context.getExternalFilesDir(Environment.DIRECTORY_MOVIES),
+                                "test.mp4"
+                            )
+                            val outputOptions = FileOutputOptions.Builder(outputFile).build()
+                            recording = videoCapture.output
+                                .prepareRecording(context, outputOptions)
+                                .start(ContextCompat.getMainExecutor(context)) { recordEvent ->
+                                    when (recordEvent) {
+                                        is VideoRecordEvent.Start -> {
+                                            isRecording = true
+                                            showMessage = false
+                                            CoroutineScope(Dispatchers.Main).launch {
+                                                while (countdown > 0) {
+                                                    delay(1000)
+                                                    countdown--
+                                                }
+                                                recording?.stop()
+                                            }
+                                        }
+                                        is VideoRecordEvent.Finalize -> {
+                                            isRecording = false
+                                            countdown = 5
+
+                                            if (!recordEvent.hasError()) {
+                                                message = "Video capture succeeded: ${outputFile.absolutePath}"
+                                            } else {
+                                                message = "Video capture ends with error: ${recordEvent.error}"
+                                                recording?.close()
+                                                recording = null
+                                            }
+                                            showMessage = true
+                                        }
+                                    }
+                                }
+                        } else {
+                            recording?.stop()
+                            countdown = 5
+                        }
+                    },
+                ) { Text(if (isRecording) "Stop Recording" else "Record") }
+                // upload button
+                Button(onClick = { }) { Text("Upload") }
+            }
         }
     }
 }
