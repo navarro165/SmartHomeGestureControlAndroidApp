@@ -70,6 +70,7 @@ dependencies {
     implementation(libs.androidx.camera.video)
     implementation(libs.androidx.foundation.layout.android)
     implementation(libs.androidx.viewfinder.core)
+    implementation(libs.okhttp)
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
