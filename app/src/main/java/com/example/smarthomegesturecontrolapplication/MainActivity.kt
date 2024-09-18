@@ -58,12 +58,18 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import okhttp3.MediaType.Companion.toMediaTypeOrNull
+import okhttp3.MultipartBody
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import okhttp3.RequestBody.Companion.asRequestBody
+import okhttp3.Response
 import java.io.File
 
 
 // constants
 val userLastName: String = "NavarroGonzalez"
-val serverUploadURL: String = "http://127.0.0.1:5000/upload"
+val serverUploadURL: String = "http://10.0.2.2:5000/upload"  // fog server (this maps to localhost on emulator's host computer)
 
 // will keep track of gesture selection
 var selectedGestureName: String = ""
@@ -88,6 +94,27 @@ val gesturesNameToIdMap = mapOf(
     "8" to R.raw.num8,
     "9" to R.raw.num9
 )
+
+val gesturesIdToLabelMap = mapOf(
+    R.raw.lighton to "LightOn",
+    R.raw.lightoff to "LightOff",
+    R.raw.fanon to "FanOn",
+    R.raw.fanoff to "FanOff",
+    R.raw.fanup to "FanUp",
+    R.raw.fandown to "FanDown",
+    R.raw.setthermo to "SetThermo",
+    R.raw.num0 to "Num0",
+    R.raw.num1 to "Num1",
+    R.raw.num2 to "Num2",
+    R.raw.num3 to "Num3",
+    R.raw.num4 to "Num4",
+    R.raw.num5 to "Num5",
+    R.raw.num6 to "Num6",
+    R.raw.num7 to "Num7",
+    R.raw.num8 to "Num8",
+    R.raw.num9 to "Num9"
+)
+
 
 
 class MainActivity : ComponentActivity() {
@@ -120,10 +147,7 @@ class MainActivity : ComponentActivity() {
 fun Screen1(navController: NavController) {
     var expanded by remember { mutableStateOf(false) }
 
-    Column(modifier = Modifier
-        .fillMaxSize()
-        .padding(16.dp)) {
-
+    Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
         Spacer(modifier = Modifier.height(16.dp))
         OutlinedTextField(
             value = selectedGestureName,
@@ -171,10 +195,7 @@ fun Screen2(navController: NavController) {
     val videoUri = Uri.parse("android.resource://${LocalContext.current.packageName}/$selectedGestureID")
     var videoView by remember { mutableStateOf<VideoView?>(null) }
 
-    Column(modifier = Modifier
-        .fillMaxSize()
-        .padding(16.dp)) {
-
+    Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
         Spacer(modifier = Modifier.height(16.dp))
         Text("Selected gesture: $selectedGestureName", modifier = Modifier.fillMaxWidth())
 
@@ -210,6 +231,23 @@ fun Screen2(navController: NavController) {
     }
 }
 
+fun uploadVideo(videoFile: File, serverUploadURL: String): Response {
+    val client = OkHttpClient()
+    val requestBody = MultipartBody.Builder()
+        .setType(MultipartBody.FORM)
+        .addFormDataPart(
+            "file", videoFile.name,
+            videoFile.asRequestBody("video/mp4".toMediaTypeOrNull())
+        )
+        .build()
+    val request = Request.Builder()
+        .url(serverUploadURL)
+        .post(requestBody)
+        .build()
+
+    return client.newCall(request).execute()
+}
+
 @Composable
 fun Screen3(navController: NavController) {
     val context = LocalContext.current
@@ -221,6 +259,8 @@ fun Screen3(navController: NavController) {
     var countdown by remember { mutableIntStateOf(5) }
     var showMessage by remember { mutableStateOf(false) }
     var message by remember { mutableStateOf("") }
+    var pathToLastVideo by remember { mutableStateOf("") }
+    var practiceNumber by remember { mutableIntStateOf(1) }
 
     val launcher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission(),
@@ -228,14 +268,15 @@ fun Screen3(navController: NavController) {
     )
     LaunchedEffect(key1 = true) { launcher.launch(Manifest.permission.CAMERA) }
 
-    Column(modifier = Modifier
-        .fillMaxSize()
-        .padding(16.dp)) {
+    Column(
+        modifier = Modifier.fillMaxSize().padding(16.dp)) {
         Spacer(modifier = Modifier.height(16.dp))
         Text("Gesture to record: $selectedGestureName", modifier = Modifier.fillMaxWidth())
         Spacer(modifier = Modifier.height(16.dp))
 
-        if (!showCamera) { Text("Camera permission required") } else {
+        if (!showCamera) {
+            Text("Camera permission required")
+        } else {
             AndroidView(
                 modifier = Modifier.weight(1f),
                 factory = { context ->
@@ -248,7 +289,12 @@ fun Screen3(navController: NavController) {
                         {
                             val cameraProvider = cameraProviderFuture.get()
                             cameraProvider.unbindAll()
-                            cameraProvider.bindToLifecycle(context as ComponentActivity, cameraSelector, preview, videoCapture)
+                            cameraProvider.bindToLifecycle(
+                                context as ComponentActivity,
+                                cameraSelector,
+                                preview,
+                                videoCapture
+                            )
                         },
                         ContextCompat.getMainExecutor(context)
                     )
@@ -268,9 +314,7 @@ fun Screen3(navController: NavController) {
             if (showMessage) {
                 Text(
                     text = message,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(16.dp),
+                    modifier = Modifier.fillMaxWidth().padding(16.dp),
                     textAlign = TextAlign.Center
                 )
             }
@@ -280,17 +324,18 @@ fun Screen3(navController: NavController) {
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center) {
                 // back button
                 Button(onClick = { navController.popBackStack() }) { Text("Back") }
+
                 // home button
                 Button(onClick = { navController.navigate("screen1") }) { Text("Home") }
+
                 // record button
                 Button(
                     onClick = {
                         if (!isRecording) {
-                            val outputFile = File(
-                                context.getExternalFilesDir(Environment.DIRECTORY_MOVIES),
-                                "test.mp4"
-                            )
+                            val downloadsDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
+                            val outputFile = File(downloadsDir, "${gesturesIdToLabelMap[selectedGestureID]}_PRACTICE_${practiceNumber}_$userLastName.mp4")
                             val outputOptions = FileOutputOptions.Builder(outputFile).build()
+
                             recording = videoCapture.output
                                 .prepareRecording(context, outputOptions)
                                 .start(ContextCompat.getMainExecutor(context)) { recordEvent ->
@@ -306,12 +351,13 @@ fun Screen3(navController: NavController) {
                                                 recording?.stop()
                                             }
                                         }
+
                                         is VideoRecordEvent.Finalize -> {
                                             isRecording = false
                                             countdown = 5
-
+                                            pathToLastVideo = outputFile.absolutePath
                                             if (!recordEvent.hasError()) {
-                                                message = "Video capture succeeded: ${outputFile.absolutePath}"
+                                                message = "Video capture succeeded: $pathToLastVideo"
                                             } else {
                                                 message = "Video capture ends with error: ${recordEvent.error}"
                                                 recording?.close()
@@ -321,14 +367,31 @@ fun Screen3(navController: NavController) {
                                         }
                                     }
                                 }
+
+                            practiceNumber += 1
+
                         } else {
                             recording?.stop()
                             countdown = 5
                         }
                     },
                 ) { Text(if (isRecording) "Stop Recording" else "Record") }
+
                 // upload button
-                Button(onClick = { }) { Text("Upload") }
+                Button(onClick = {
+                    val file = File(pathToLastVideo)
+                    if (file.exists()) {
+                        CoroutineScope(Dispatchers.IO).launch {
+                            val response = uploadVideo(file, serverUploadURL)
+                            message = "Upload response: ${response.body?.string()}"
+                            showMessage = true
+                        }
+                    } else {
+                        message = "Can't find video file=$pathToLastVideo"
+                        showMessage = true
+                    }
+
+                }) { Text("Upload") }
             }
         }
     }
