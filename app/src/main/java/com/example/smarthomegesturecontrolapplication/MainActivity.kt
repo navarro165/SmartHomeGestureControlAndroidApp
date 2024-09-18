@@ -39,6 +39,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -48,13 +49,10 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
-import androidx.lifecycle.ViewModel
 import androidx.navigation.NavController
-import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
-import androidx.navigation.navArgument
 import com.example.smarthomegesturecontrolapplication.ui.theme.SmartHomeGestureControlApplicationTheme
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -63,28 +61,33 @@ import kotlinx.coroutines.launch
 import java.io.File
 
 
-val GESTURES = mapOf(
-    "Turn on lights" to R.raw.h_lighton,
-    "Turn off lights" to R.raw.h_lightoff,
-    "Turn on fan" to R.raw.h_fanon,
-    "Turn off fan" to R.raw.h_fanoff,
-    "Increase fan speed" to R.raw.h_increasefanspeed,
-    "Decrease fan speed" to R.raw.h_decreasefanspeed,
-    "Set Thermostat to specified temperature" to R.raw.h_setthermo,
-    "0" to R.raw.h_0,
-    "1" to R.raw.h_1,
-    "2" to R.raw.h_2,
-    "3" to R.raw.h_3,
-    "4" to R.raw.h_4,
-    "5" to R.raw.h_5,
-    "6" to R.raw.h_6,
-    "7" to R.raw.h_7,
-    "8" to R.raw.h_8,
-    "9" to R.raw.h_9
-)
+// constants
+val userLastName: String = "NavarroGonzalez"
+val serverUploadURL: String = "http://127.0.0.1:5000/upload"
 
-class SharedViewModel : ViewModel() { var selectedGesture: String = "" }
-var viewModel = SharedViewModel()
+// will keep track of gesture selection
+var selectedGestureName: String = ""
+var selectedGestureID: Int = 0
+
+val gesturesNameToIdMap = mapOf(
+    "Turn on lights" to R.raw.lighton,
+    "Turn off lights" to R.raw.lightoff,
+    "Turn on fan" to R.raw.fanon,
+    "Turn off fan" to R.raw.fanoff,
+    "Increase fan speed" to R.raw.fanup,
+    "Decrease fan speed" to R.raw.fandown,
+    "Set Thermostat to specified temperature" to R.raw.setthermo,
+    "0" to R.raw.num0,
+    "1" to R.raw.num1,
+    "2" to R.raw.num2,
+    "3" to R.raw.num3,
+    "4" to R.raw.num4,
+    "5" to R.raw.num5,
+    "6" to R.raw.num6,
+    "7" to R.raw.num7,
+    "8" to R.raw.num8,
+    "9" to R.raw.num9
+)
 
 
 class MainActivity : ComponentActivity() {
@@ -101,14 +104,8 @@ class MainActivity : ComponentActivity() {
                     composable(route = "screen1") { Screen1(navController) }
 
                     // screen 2
-                    composable(
-                        route = "screen2/{videoResId}",
-                        arguments = listOf(navArgument("videoResId") { type = NavType.IntType })
-                    ) {
-                        backStackEntry ->
-                        val videoResId = backStackEntry.arguments?.getInt("videoResId") ?: 0
-                        Screen2(navController, videoResId)
-                    }
+                    composable("screen2") { Screen2(navController) }
+
 
                     // screen 3
                     composable("screen3") { Screen3(navController) }
@@ -121,17 +118,16 @@ class MainActivity : ComponentActivity() {
 
 @Composable
 fun Screen1(navController: NavController) {
-    var selectedPath by remember { mutableStateOf(0) }
     var expanded by remember { mutableStateOf(false) }
-
 
     Column(modifier = Modifier
         .fillMaxSize()
         .padding(16.dp)) {
+
         Spacer(modifier = Modifier.height(16.dp))
         OutlinedTextField(
-            value = viewModel.selectedGesture,
-            onValueChange = {  },
+            value = selectedGestureName,
+            onValueChange = { },
             label = { Text("Selected gesture") },
             trailingIcon = {
                 IconButton(onClick = { expanded = true }) {
@@ -141,16 +137,17 @@ fun Screen1(navController: NavController) {
             readOnly = true,
             modifier = Modifier.fillMaxWidth()
         )
+
         DropdownMenu(
             expanded = expanded,
             onDismissRequest = { expanded = false },
             modifier = Modifier.fillMaxWidth()
         ) {
-            GESTURES.forEach { (gesture, path) ->
+            gesturesNameToIdMap.forEach { (gesture, path) ->
                 DropdownMenuItem(
                     onClick = {
-                        viewModel.selectedGesture = gesture
-                        selectedPath = path
+                        selectedGestureName = gesture
+                        selectedGestureID = path
                         expanded = false
                     },
                     text = { Text(gesture) }
@@ -160,26 +157,26 @@ fun Screen1(navController: NavController) {
 
         Spacer(modifier = Modifier.height(16.dp))
         Button(
-            onClick = { navController.navigate("screen2/${selectedPath}") },
+            onClick = { navController.navigate("screen2") },
             modifier = Modifier.fillMaxWidth()
         ) { Text("Next") }
 
         Spacer(modifier = Modifier.height(16.dp))
-        Text("Selected gesture: ${viewModel.selectedGesture}", modifier = Modifier.fillMaxWidth())
+        Text("Selected gesture: $selectedGestureName", modifier = Modifier.fillMaxWidth())
     }
 }
 
 @Composable
-fun Screen2(navController: NavController, videoResId: Int) {
-    val videoUri = Uri.parse("android.resource://${LocalContext.current.packageName}/$videoResId")
-    var replayCount by remember { mutableStateOf(0) }
+fun Screen2(navController: NavController) {
+    val videoUri = Uri.parse("android.resource://${LocalContext.current.packageName}/$selectedGestureID")
     var videoView by remember { mutableStateOf<VideoView?>(null) }
 
     Column(modifier = Modifier
         .fillMaxSize()
         .padding(16.dp)) {
+
         Spacer(modifier = Modifier.height(16.dp))
-        Text("Selected gesture: ${viewModel.selectedGesture}", modifier = Modifier.fillMaxWidth())
+        Text("Selected gesture: $selectedGestureName", modifier = Modifier.fillMaxWidth())
 
         // video
         Spacer(modifier = Modifier.height(16.dp))
@@ -189,14 +186,7 @@ fun Screen2(navController: NavController, videoResId: Int) {
                 VideoView(context).apply {
                     videoView = this
                     setVideoURI(videoUri)
-                    setOnCompletionListener {
-                        if (replayCount < 2) {
-                            replayCount++
-                            start()
-                        } else {
-                            pause()
-                        }
-                    }
+                    setOnCompletionListener { pause() }
                     requestFocus()
                     start()
                 }
@@ -211,10 +201,7 @@ fun Screen2(navController: NavController, videoResId: Int) {
             Spacer(modifier = Modifier.weight(1f))
 
             // replay button
-            Button(onClick = {
-                replayCount = 0
-                videoView?.start()
-            }) { Text("Replay") }
+            Button(onClick = { videoView?.start() }) { Text("Replay") }
             Spacer(modifier = Modifier.weight(1f))
 
             // practice button
@@ -231,7 +218,7 @@ fun Screen3(navController: NavController) {
     val videoCapture = remember { VideoCapture.withOutput(recorder) }
     var isRecording by remember { mutableStateOf(false) }
     var showCamera by remember { mutableStateOf(false) }
-    var countdown by remember { mutableStateOf(5) }
+    var countdown by remember { mutableIntStateOf(5) }
     var showMessage by remember { mutableStateOf(false) }
     var message by remember { mutableStateOf("") }
 
@@ -241,9 +228,11 @@ fun Screen3(navController: NavController) {
     )
     LaunchedEffect(key1 = true) { launcher.launch(Manifest.permission.CAMERA) }
 
-    Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
+    Column(modifier = Modifier
+        .fillMaxSize()
+        .padding(16.dp)) {
         Spacer(modifier = Modifier.height(16.dp))
-        Text("Gesture to record: ${viewModel.selectedGesture}", modifier = Modifier.fillMaxWidth())
+        Text("Gesture to record: $selectedGestureName", modifier = Modifier.fillMaxWidth())
         Spacer(modifier = Modifier.height(16.dp))
 
         if (!showCamera) { Text("Camera permission required") } else {
@@ -279,7 +268,9 @@ fun Screen3(navController: NavController) {
             if (showMessage) {
                 Text(
                     text = message,
-                    modifier = Modifier.fillMaxWidth().padding(16.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
                     textAlign = TextAlign.Center
                 )
             }
